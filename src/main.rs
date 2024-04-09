@@ -113,6 +113,9 @@ impl<'a> Comp<'a> {
             jump,
         }
     }
+    fn as_code(&self) -> u16 {
+        todo!()
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -140,7 +143,16 @@ impl<'a> ParsedInstruction<'a> {
                 // let code = code | 0b1_000000000000000;
                 format!("{:016b}", code)
             }
-            ParsedInstruction::Address(_) => todo!(),
+            ParsedInstruction::Address(a) => {
+                if a.chars().all(|c| c.is_ascii_digit()) {
+                    let code = a.parse::<u16>().unwrap();
+                    format!("{:016b}", code)
+                } else {
+                    let code = *symbol_table.labels.get(*a).unwrap();
+                    // let code = code | 0b1_000000000000000;
+                    format!("{:016b}", code)
+                }
+            }
             ParsedInstruction::Computation(_) => todo!(),
         }
     }
