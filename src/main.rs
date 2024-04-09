@@ -114,7 +114,12 @@ impl<'a> Comp<'a> {
         }
     }
     fn as_code(&self) -> u16 {
-        todo!()
+        let dest = convert_dest(self.dest);
+        let comp = convert_comp(self.comp);
+        let jump = convert_jump(self.jump);
+        let base = 0b111_0000000_000_000;
+
+        base | (comp << 6) | (dest << 3) | jump
     }
 }
 
@@ -153,7 +158,10 @@ impl<'a> ParsedInstruction<'a> {
                     format!("{:016b}", code)
                 }
             }
-            ParsedInstruction::Computation(_) => todo!(),
+            ParsedInstruction::Computation(comp) => {
+                let code = comp.as_code();
+                format!("{:016b}", code)
+            }
         }
     }
 }
@@ -240,14 +248,21 @@ fn main() -> eyre::Result<()> {
     let mut args = env::args();
     if let Some(path) = args.nth(1) {
         let file = BufReader::new(File::open(path)?);
-        let lines: Result<Vec<_>, _> = file.lines().collect();
-        let lines = lines?;
+        // let lines: Result<Vec<_>, _> = file
+        let lines: Vec<_> = file
+            .lines()
+            .filter_map(|s| remove_whitespace_comments(&s.unwrap()))
+            .collect();
+        // let lines = lines?;
 
         let parsed = lines
             .iter()
             .map(|s| ParsedInstruction::parse_instruction(s))
             .collect::<Vec<_>>();
         let symbol_table = SymbolTable::fst_pass(&parsed);
+        for pi in parsed.into_iter() {
+            println!("{}", pi.snd_pass(&symbol_table));
+        }
     }
     Ok(())
 }
@@ -348,6 +363,31 @@ mod test {
                 jump: None,
             }
         );
+    }
+
+    #[test]
+    fn test_comp_code() {
+        let parsed = Comp::parse_comp("M=1");
+        assert_eq!(
+            parsed,
+            Comp {
+                dest: Some("M"),
+                comp: "1",
+                jump: None,
+            }
+        );
+        assert_eq!(parsed.as_code(), 0b1110111111001000);
+
+        let parsed = Comp::parse_comp("M=0");
+        assert_eq!(
+            parsed,
+            Comp {
+                dest: Some("M"),
+                comp: "0",
+                jump: None,
+            }
+        );
+        assert_eq!(parsed.as_code(), 0b1110101010001000);
     }
 
     #[test]
