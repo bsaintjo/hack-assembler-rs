@@ -5,5 +5,9 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[bin]]
+name = "HackAssembler"
+path = "src/main.rs"
+
 [dependencies]
 eyre = "0.6.12"

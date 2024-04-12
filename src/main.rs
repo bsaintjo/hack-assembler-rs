@@ -1,8 +1,9 @@
+#![allow(non_snake_case)]
+
 use std::{
     collections::HashMap,
     env,
     fs::File,
-    hash::Hash,
     io::{BufRead, BufReader},
 };
 
@@ -21,7 +22,7 @@ fn remove_whitespace_comments(mut s: &str) -> Option<String> {
 
 fn convert_jump(s: Option<&str>) -> u16 {
     match s {
-        None => 0b000,
+        None        => 0b000,
         Some("JGT") => 0b001,
         Some("JEQ") => 0b010,
         Some("JGE") => 0b011,
@@ -29,38 +30,39 @@ fn convert_jump(s: Option<&str>) -> u16 {
         Some("JNE") => 0b101,
         Some("JLE") => 0b110,
         Some("JMP") => 0b111,
-        Some(_) => panic!("Invalid jump"),
+        Some(_) => panic!("Invalid jump {s:?}"),
     }
 }
 
 fn convert_dest(s: Option<&str>) -> u16 {
     match s {
-        None => 0b000,
-        Some("M") => 0b001,
-        Some("D") => 0b010,
-        Some("DM") => 0b011,
-        Some("A") => 0b100,
-        Some("AM") => 0b101,
-        Some("AD") => 0b110,
+        None        => 0b000,
+        Some("M")   => 0b001,
+        Some("D")   => 0b010,
+        Some("DM")  => 0b011,
+        Some("MD")  => 0b011,
+        Some("A")   => 0b100,
+        Some("AM")  => 0b101,
+        Some("AD")  => 0b110,
         Some("ADM") => 0b111,
-        Some(_) => panic!("Invalid dest"),
+        Some(_) => panic!("Invalid dest {s:?}"),
     }
 }
 
 fn convert_comp(s: &str) -> u16 {
     match s {
-        "0" => 0b0_101_010,
-        "1" => 0b0_111_111,
-        "-1" => 0b0_111_010,
-        "D" => 0b0_001_100,
-        "A" => 0b0_110_000,
-        "M" => 0b1_110_000,
-        "!D" => 0b0_001_101,
-        "!A" => 0b0_110_001,
-        "!M" => 0b1_110_001,
-        "-D" => 0b0_001_111,
-        "-A" => 0b0_110_011,
-        "-M" => 0b1_110_011,
+        "0"   => 0b0_101_010,
+        "1"   => 0b0_111_111,
+        "-1"  => 0b0_111_010,
+        "D"   => 0b0_001_100,
+        "A"   => 0b0_110_000,
+        "M"   => 0b1_110_000,
+        "!D"  => 0b0_001_101,
+        "!A"  => 0b0_110_001,
+        "!M"  => 0b1_110_001,
+        "-D"  => 0b0_001_111,
+        "-A"  => 0b0_110_011,
+        "-M"  => 0b1_110_011,
         "D+1" => 0b0_011_111,
         "A+1" => 0b0_110_111,
         "M+1" => 0b1_110_111,
@@ -77,7 +79,7 @@ fn convert_comp(s: &str) -> u16 {
         "D&M" => 0b1_000_000,
         "D|A" => 0b0_010_101,
         "D|M" => 0b1_010_101,
-        _ => panic!("Invalid comp"),
+        _ => panic!("Invalid comp {s:?}"),
     }
 }
 
@@ -117,6 +119,8 @@ impl<'a> Comp<'a> {
         let dest = convert_dest(self.dest);
         let comp = convert_comp(self.comp);
         let jump = convert_jump(self.jump);
+
+        #[allow(clippy::unusual_byte_groupings)]
         let base = 0b111_0000000_000_000;
 
         base | (comp << 6) | (dest << 3) | jump
@@ -141,26 +145,21 @@ impl<'a> ParsedInstruction<'a> {
         }
     }
 
-    fn snd_pass(&self, symbol_table: &SymbolTable) -> String {
+    fn snd_pass(&self, symbol_table: &SymbolTable) -> Option<String> {
         match self {
-            ParsedInstruction::Label(l) => {
-                let code = *symbol_table.labels.get(*l).unwrap();
-                // let code = code | 0b1_000000000000000;
-                format!("{:016b}", code)
-            }
+            ParsedInstruction::Label(_) => None,
             ParsedInstruction::Address(a) => {
                 if a.chars().all(|c| c.is_ascii_digit()) {
                     let code = a.parse::<u16>().unwrap();
-                    format!("{:016b}", code)
+                    Some(format!("{:016b}", code))
                 } else {
                     let code = *symbol_table.labels.get(*a).unwrap();
-                    // let code = code | 0b1_000000000000000;
-                    format!("{:016b}", code)
+                    Some(format!("{:016b}", code))
                 }
             }
             ParsedInstruction::Computation(comp) => {
                 let code = comp.as_code();
-                format!("{:016b}", code)
+                Some(format!("{:016b}", code))
             }
         }
     }
@@ -190,7 +189,7 @@ impl Default for SymbolTable {
                 ("R13".into(), 13),
                 ("R14".into(), 14),
                 ("R15".into(), 15),
-                ("SCP".into(), 0),
+                ("SP".into(), 0),
                 ("LCL".into(), 1),
                 ("ARG".into(), 2),
                 ("THIS".into(), 3),
@@ -204,6 +203,7 @@ impl Default for SymbolTable {
 
 impl SymbolTable {
     fn fst_pass(pis: &[ParsedInstruction<'_>]) -> Self {
+        let mut symtable = SymbolTable::default();
         let mut labels: HashMap<String, u16> = HashMap::new();
         let mut adds: Vec<String> = Vec::new();
         let mut counter = 0;
@@ -221,7 +221,7 @@ impl SymbolTable {
                         continue;
                     }
 
-                    if !labels.contains_key(*s) {
+                    if !symtable.labels.contains_key(*s) && !labels.contains_key(*s) {
                         adds.push(s.to_string());
                     }
                 }
@@ -238,31 +238,35 @@ impl SymbolTable {
                 tmp
             });
         }
-        let mut symtable = SymbolTable::default();
         symtable.labels.extend(labels);
         symtable
     }
 }
 
+fn run(path: &str) -> eyre::Result<()> {
+    let file = BufReader::new(File::open(path)?);
+    let lines: Vec<_> = file
+        .lines()
+        .filter_map(|s| remove_whitespace_comments(&s.unwrap()))
+        .collect();
+
+    let parsed = lines
+        .iter()
+        .map(|s| ParsedInstruction::parse_instruction(s))
+        .collect::<Vec<_>>();
+    let symbol_table = SymbolTable::fst_pass(&parsed);
+    for pi in parsed.into_iter() {
+        if let Some(translated) = pi.snd_pass(&symbol_table) {
+            println!("{translated}");
+        }
+    }
+    Ok(())
+}
+
 fn main() -> eyre::Result<()> {
     let mut args = env::args();
     if let Some(path) = args.nth(1) {
-        let file = BufReader::new(File::open(path)?);
-        // let lines: Result<Vec<_>, _> = file
-        let lines: Vec<_> = file
-            .lines()
-            .filter_map(|s| remove_whitespace_comments(&s.unwrap()))
-            .collect();
-        // let lines = lines?;
-
-        let parsed = lines
-            .iter()
-            .map(|s| ParsedInstruction::parse_instruction(s))
-            .collect::<Vec<_>>();
-        let symbol_table = SymbolTable::fst_pass(&parsed);
-        for pi in parsed.into_iter() {
-            println!("{}", pi.snd_pass(&symbol_table));
-        }
+        run(&path)?;
     }
     Ok(())
 }
@@ -270,6 +274,11 @@ fn main() -> eyre::Result<()> {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_pong() {
+        run("extra/pong/Pong.asm").unwrap();
+    }
 
     #[test]
     fn test_symbol_table() {
